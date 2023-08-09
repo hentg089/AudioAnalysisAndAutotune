@@ -9,6 +9,11 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from tkinter import filedialog
 import os
+import pygame
+from tkinter import PhotoImage
+
+#allows us to play sound
+pygame.mixer.init()
 
 class VoiceRecorder:
     def __init__(self):
@@ -22,7 +27,7 @@ class VoiceRecorder:
         self.ax.set_title('Audio Signal')
 
         #some window features: dimensions and resizable
-        self.root.geometry(f"{800}x{800}")
+        self.root.state("zoomed")
         self.root.resizable(False, False)
 
         #draw our plot on the window
