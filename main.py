@@ -11,61 +11,126 @@ from tkinter import filedialog
 import os
 import pygame
 from tkinter import PhotoImage
+from scipy.io import wavfile
+from tkinter import simpledialog
+
 
 #allows us to play sound
 pygame.mixer.init()
 
 class VoiceRecorder:
     def __init__(self):
-        #init our window and our thing
+        #init our window, title, zoom state, and resizeableness
         self.root = tk.Tk()
-        self.fig, self.ax = plt.subplots()
-
-        #set plot characteristic
-        self.ax.set_xlabel('Time')
-        self.ax.set_ylabel('Signal Wave')
-        self.ax.set_title('Audio Signal')
-
-        #some window features: dimensions and resizable
-        self.root.state("zoomed")
+        self.root.title('Audio Analysis and Autotune Tool')
+        self.root.wm_state('zoomed')
         self.root.resizable(False, False)
 
-        #draw our plot on the window
+        #set plot1 characteristic
+        self.fig, self.ax = plt.subplots()
+        self.ax.set_xlabel('Time')
+        self.ax.set_ylabel('Pressure/Wave Amplitude')
+        self.ax.set_title('Audio Signal')
+
+        #set plot2 charactersistic
+        self.figFFT, self.axFFT = plt.subplots()
+        self.axFFT.set_xlabel('Frequency')
+        self.axFFT.set_ylabel('Pressure/Wave Amplitude')
+        self.axFFT.set_title('Audio Signal FFT Transformed')
+
+        #set plot3 characteristics
+        self.figFFT_shifted, self.axFFT_shifted = plt.subplots()
+        self.axFFT_shifted.set_xlabel('Frequency')
+        self.axFFT_shifted.set_ylabel('Pressure/Wave Amplitude Shifted')
+        self.axFFT_shifted.set_title('Audio Signal Shifted')
+
+        #set plot4 characterstics
+        self.figFFT_shifted_inverse, self.axFFT_shifted_inverse = plt.subplots()
+        self.axFFT_shifted_inverse.set_xlabel('Time')
+        self.axFFT_shifted_inverse.set_ylabel('Pressure/Wave Amplitude Shifted Inverse')
+        self.axFFT_shifted_inverse.set_title('Audio Signal Shifted Inverse FFT')
+
+        #setup our plots
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
-        self.canvas.get_tk_widget().pack(fill='both')
-
-        #draw our tklabel
-        self.label = tk.Label(text="00:00:00", font=("Arial", 15, "bold"))
-        self.label.pack()
-
-        #draw our record button
+        self.canvasFFT = FigureCanvasTkAgg(self.figFFT, master=self.root)
+        self.canvasFFT_shifted = FigureCanvasTkAgg(self.figFFT_shifted, master = self.root)
+        self.canvasFFT_shifted_inverse = FigureCanvasTkAgg(self.figFFT_shifted_inverse, master = self.root)
+        #setup our record button
         self.button_record = tk.Button(text="   Record  ", font=("Arial", 30, "bold"),
                                 command=self.click_handler)
-        self.button_record.pack(side='left', expand=True, fill='both')
-
-
-        #draw our select audio button
-        self.button_file_select = tk.Button(text="Select File", font=("Arial",30,"bold"),
-                                command=self.select_file_handler)
-        self.button_file_select.pack(side='left', expand=True, fill='both')
-        self.file = ""
-
-
-
         self.recording = False
+        # setup our select audio button
+        self.button_file_select = tk.Button(text="Select File", font=("Arial", 30, "bold"),
+                                            command=self.select_file_handler)
+        self.file = ""
+        #setup our save wav file button
+        self.button_save_file = tk.Button(text="Save File", font = ("Arial", 30, "bold"),
+                                          command=self.save_file_handler, state='disabled')
+        # setup our tklabel
+        self.label = tk.Label(text="00:00:00", font=("Arial", 15, "bold"))
+        #setup our play default audio button
+        self.button_shift_audio = tk.Button(text="Shift Audio", font = ("Arial", 30, "bold"),
+                                             command=self.shift_audio_handler, state='disabled')
+
+        self.root.columnconfigure((0,1,2,3,4,5), weight=1)
+        self.root.rowconfigure((0,1), weight=1)
+        self.root.rowconfigure(2, weight=3)
+        self.root.rowconfigure(3, weight=100)
+
+        #insert our graphs into it
+        self.canvas.get_tk_widget().grid(row=0, column=0, rowspan=2, sticky='nsew', padx=10, pady=10)
+        self.canvasFFT.get_tk_widget().grid(row=0, column=1, rowspan=2, sticky='nsew', padx=10, pady=10)
+        self.canvasFFT_shifted.get_tk_widget().grid(row=0, column=3, rowspan=2, sticky='nsew', padx=10, pady=10)
+        self.canvasFFT_shifted_inverse.get_tk_widget().grid(row = 0, column=4, rowspan=2, sticky='nsew', padx=10, pady=10)
+
+        #insert our graph button into it
+
+        #insert our label
+        self.label.grid(row=2, column=0, columnspan=6, sticky='nsew')
+
+        #insert our lower 3 buttons
+        self.button_record.grid(row=3, column=0, columnspan=1, sticky='nsew')
+        self.button_file_select.grid(row=3, column=1, columnspan=1, sticky='nsew')
+        self.button_save_file.grid(row=3, column=4, columnspan=2, sticky='nsew')
+        self.button_shift_audio.grid(row = 3, column=3, sticky='nsew')
+
+
+        #temporary removal
+        #self.button_record.pack(side='left', expand=True, fill='both')
+        #self.button_file_select.pack(side='right', expand=True, fill='both')
+        #self.label.pack(side='top')
+        #self.canvas.get_tk_widget().pack(side='top', fill='both')
+
         self.root.mainloop()
 
+
+    def shift_audio_handler(self):
+        result = simpledialog.askstring("Input", "Input frequency shift value")
+
+        #were going to calculate ftt then shift then inverse FFT
+
+        sampling_rate, audio_data = wavfile.read(self.file)
+
+        # convert to mono
+        if len(audio_data.shape) > 1:
+            audio_data = audio_data[:, 0]
+
+        frequency_spectrum = np.fft.fft(audio_data) / 1000
+        frequencies = np.fft.fftfreq(len(audio_data), d=1 / sampling_rate)
+
+        
+
+
+
+    def save_file_handler(self):
+        pass
     def click_handler(self):
         if self.recording:
             self.recording = False
             self.button_record.config(fg="black")
         else:
             #redraw our graph
-            self.ax.clear()
-            self.ax.set_xlabel('Time')
-            self.ax.set_ylabel('Signal Wave')
-            self.ax.set_title('Audio Signal')
-            self.canvas.draw()
+            self.clearGraphs()
 
             #update our recording state and change button color
             self.recording = True
@@ -81,13 +146,20 @@ class VoiceRecorder:
                 filetypes=[(".wav", '*.wav')]
             )
             self.get_plot(self.file)
+            self.get_fft_plot(self.file)
 
-        threading.Thread(target = _open_dialog).start();
+
+
+        threading.Thread(target = _open_dialog).start()
 
 
     def record(self):
+        self.file = "recording.wav"
         #starting our audio stream
         audio = pyaudio.PyAudio()
+        #rate is how fast se sample our data
+        #channels is mono sample
+        #fpb is the lenght of our audio buffer
         stream = audio.open(format=pyaudio.paInt16, channels=1, rate=44100, input=True, frames_per_buffer=1024)
 
         frames = []
@@ -118,6 +190,7 @@ class VoiceRecorder:
 
         #all the overall code does is record and then save the recording the the recording wav
         self.get_plot()
+        self.get_fft_plot("recording.wav")
 
 
     def get_plot(self, recording_name = "recording.wav"):
@@ -139,5 +212,48 @@ class VoiceRecorder:
         self.ax.plot(times, signal_array, 'b-')
         self.canvas.draw()
 
+    #not working below VVV
+    def get_fft_plot(self, recording_name="recording.wav"):
+        sampling_rate, audio_data = wavfile.read(recording_name)
+
+        #convert to mono
+        if len(audio_data.shape) > 1:
+            audio_data = audio_data[:, 0]
+
+        frequency_spectrum = np.fft.fft(audio_data) / 1000
+        frequencies = np.fft.fftfreq(len(audio_data), d=1 / sampling_rate)
+
+        self.axFFT.plot(frequencies[:len(frequencies)//10], frequency_spectrum[:len(frequency_spectrum)//10])
+        self.canvasFFT.draw()
+        self.enable_buttons()
+
+    def clearGraphs(self):
+        self.ax.clear()
+        self.ax.set_xlabel('Time')
+        self.ax.set_ylabel('Pressure/Wave Amplitude')
+        self.ax.set_title('Audio Signal')
+        self.canvas.draw()
+
+        self.axFFT.clear()
+        self.axFFT.set_xlabel('Frequency')
+        self.axFFT.set_ylabel('Pressure/Wave Amplitude')
+        self.axFFT.set_title('Audio Signal FFT Transformed')
+        self.canvasFFT.draw()
+
+        self.axFFT_shifted.clear()
+        self.axFFT_shifted.set_xlabel('Time')
+        self.axFFT_shifted.set_ylabel('Pressure/Wave Amplitude')
+        self.axFFT_shifted.set_title('Audio Signal Shifted')
+        self.canvasFFT_shifted.draw()
+
+        self.axFFT_shifted_inverse.clear()
+        self.axFFT_shifted_inverse.set_xlabel('Time')
+        self.axFFT_shifted_inverse.set_ylabel('Pressure/Wave Amplitude Shifted Inverse')
+        self.axFFT_shifted_inverse.set_title('Audio Signal Shifted Inverse FFT')
+        self.canvasFFT_shifted_inverse.draw()
+
+    def enable_buttons(self):
+        self.button_shift_audio.config(state='normal')
+        self.button_save_file.config(state='normal')
 
 VoiceRecorder()
