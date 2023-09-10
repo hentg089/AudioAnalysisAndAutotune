@@ -20,6 +20,9 @@ pygame.mixer.init()
 
 class VoiceRecorder:
     def __init__(self):
+        self.shifted_samplingRate = 0
+        self.ifft_result = []
+
         #init our window, title, zoom state, and resizeableness
         self.root = tk.Tk()
         self.root.title('Audio Analysis and Autotune Tool')
@@ -64,7 +67,7 @@ class VoiceRecorder:
                                             command=self.select_file_handler)
         self.file = ""
         #setup our save wav file button
-        self.button_save_file = tk.Button(text="Save File", font = ("Arial", 30, "bold"),
+        self.button_save_file = tk.Button(text="Save IFFT File", font = ("Arial", 30, "bold"),
                                           command=self.save_file_handler, state='disabled')
         # setup our tklabel
         self.label = tk.Label(text="00:00:00", font=("Arial", 15, "bold"))
@@ -104,26 +107,6 @@ class VoiceRecorder:
         self.root.mainloop()
 
 
-    def shift_audio_handler(self):
-        result = simpledialog.askstring("Input", "Input frequency shift value")
-
-        #were going to calculate ftt then shift then inverse FFT
-
-        sampling_rate, audio_data = wavfile.read(self.file)
-
-        # convert to mono
-        if len(audio_data.shape) > 1:
-            audio_data = audio_data[:, 0]
-
-        frequency_spectrum = np.fft.fft(audio_data) / 1000
-        frequencies = np.fft.fftfreq(len(audio_data), d=1 / sampling_rate)
-
-        
-
-
-
-    def save_file_handler(self):
-        pass
     def click_handler(self):
         if self.recording:
             self.recording = False
@@ -213,6 +196,59 @@ class VoiceRecorder:
         self.canvas.draw()
 
     #not working below VVV
+
+    def save_file_handler(self):
+        file_path = filedialog.asksaveasfilename(defaultextension=".wav", filetypes=[("WAV files", "*.wav")])
+
+        if file_path:
+            # Save the audio data to the specified WAV file
+            wavfile.write(file_path, self.shifted_samplingRate, np.real(self.ifft_result).astype(np.int16))
+    def shift_audio_handler(self):
+        shift_value = simpledialog.askstring("Input", "Input frequency shift value")
+
+        #were going to calculate ftt then shift then inverse FFT
+
+        sampling_rate, audio_data = wavfile.read(self.file)
+
+        self.shifted_samplingRate = sampling_rate
+
+        if len(audio_data.shape) > 1:
+            audio_data = audio_data[:, 0]
+
+        fft_result = np.fft.fft(audio_data)
+        frequencies = np.fft.fftfreq(len(audio_data), d=1 / sampling_rate)
+        frequencies = frequencies[:len(frequencies) // 10]
+
+        for i in range(len(fft_result) - 1, int(shift_value) - 1, -1):
+            fft_result[i] = fft_result[i - int(shift_value)]
+
+        for i in range(int(shift_value)):
+            fft_result[i] = 0
+
+        self.axFFT_shifted.plot(frequencies, (fft_result / 1000)[:len(fft_result)//10])
+        self.canvasFFT_shifted.draw()
+
+        #now take ifft
+
+        self.ifft_result = np.fft.ifft(fft_result)
+
+        #finding the time of the audio
+        obj = wave.open(self.file, "rb")
+
+        sample_freq = obj.getframerate()
+        n_samples = obj.getnframes()
+        signal_wave = obj.readframes(-1)
+
+        obj.close()
+        t_audio = n_samples / sample_freq
+        times = np.linspace(0, t_audio, num=n_samples)
+
+
+        self.axFFT_shifted_inverse.plot(times, self.ifft_result, 'b-')
+        self.canvasFFT_shifted_inverse.draw()
+
+        self.button_save_file.config(state='normal')
+
     def get_fft_plot(self, recording_name="recording.wav"):
         sampling_rate, audio_data = wavfile.read(recording_name)
 
@@ -220,12 +256,15 @@ class VoiceRecorder:
         if len(audio_data.shape) > 1:
             audio_data = audio_data[:, 0]
 
+        #fft of our recording and shortening the records
         frequency_spectrum = np.fft.fft(audio_data) / 1000
         frequencies = np.fft.fftfreq(len(audio_data), d=1 / sampling_rate)
+        frequency_spectrum = frequency_spectrum[:len(frequency_spectrum)//10]
+        frequencies = frequencies[:len(frequencies)//10]
 
-        self.axFFT.plot(frequencies[:len(frequencies)//10], frequency_spectrum[:len(frequency_spectrum)//10])
+        self.axFFT.plot(frequencies, frequency_spectrum)
         self.canvasFFT.draw()
-        self.enable_buttons()
+        self.button_shift_audio.config(state='normal')
 
     def clearGraphs(self):
         self.ax.clear()
@@ -241,7 +280,7 @@ class VoiceRecorder:
         self.canvasFFT.draw()
 
         self.axFFT_shifted.clear()
-        self.axFFT_shifted.set_xlabel('Time')
+        self.axFFT_shifted.set_xlabel('Frequency')
         self.axFFT_shifted.set_ylabel('Pressure/Wave Amplitude')
         self.axFFT_shifted.set_title('Audio Signal Shifted')
         self.canvasFFT_shifted.draw()
@@ -253,7 +292,5 @@ class VoiceRecorder:
         self.canvasFFT_shifted_inverse.draw()
 
     def enable_buttons(self):
-        self.button_shift_audio.config(state='normal')
-        self.button_save_file.config(state='normal')
-
+        pass
 VoiceRecorder()
